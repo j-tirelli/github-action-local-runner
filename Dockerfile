@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     jq \
     ca-certificates \
     libicu74 \
+    python3 \
+    python3-jwt \
+    python3-cryptography \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a non-root user for security
@@ -36,8 +39,9 @@ RUN RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/release
     && rm actions-runner.tar.gz \
     && sudo ./bin/installdependencies.sh
 
-# Configure the startup entrypoint script
+# Configure the startup entrypoint script and GitHub App token helper
 COPY --chown=runner:runner entrypoint.sh ./entrypoint.sh
+COPY --chown=runner:runner generate_token.py ./generate_token.py
 RUN chmod +x ./entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]

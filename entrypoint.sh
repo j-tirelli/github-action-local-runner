@@ -10,17 +10,27 @@ if [ -n "${DOCKER_HOST}" ] && [ -n "${DOCKER_CERT_PATH}" ]; then
     echo "DinD TLS certs found."
 fi
 
-# Resolve the registration token.
-# Option 1 (preferred): supply GITHUB_PAT — a token is fetched automatically from the API.
-# Option 2 (legacy):    supply RUNNER_TOKEN directly (must be regenerated every ~1 hour).
-if [ -z "${RUNNER_TOKEN}" ]; then
+# Resolve the registration token — three supported methods, in priority order:
+#   1. GitHub App (recommended): GITHUB_APP_ID + GITHUB_APP_INSTALLATION_ID + key
+#   2. Personal Access Token:    GITHUB_PAT
+#   3. Direct token (legacy):    RUNNER_TOKEN (expires ~1 hour after generation)
+if [ -n "${GITHUB_APP_ID}" ] && [ -n "${GITHUB_APP_INSTALLATION_ID}" ]; then
+    echo "Fetching runner registration token via GitHub App (App ID: ${GITHUB_APP_ID})..."
+    REPO_PATH=$(echo "${REPO_URL}" | sed 's|https://github.com/||')
+    RUNNER_TOKEN=$(REPO_PATH="${REPO_PATH}" python3 ./generate_token.py)
+    if [ -z "${RUNNER_TOKEN}" ] || [ "${RUNNER_TOKEN}" = "null" ]; then
+        echo "ERROR: Failed to fetch registration token via GitHub App."
+        exit 1
+    fi
+    echo "Registration token obtained via GitHub App."
+elif [ -z "${RUNNER_TOKEN}" ]; then
     if [ -z "${GITHUB_PAT}" ]; then
-        echo "ERROR: Either GITHUB_PAT or RUNNER_TOKEN must be set."
+        echo "ERROR: One of GITHUB_APP_ID+GITHUB_APP_INSTALLATION_ID, GITHUB_PAT, or RUNNER_TOKEN must be set."
         exit 1
     fi
     # Extract "<owner>/<repo>" from the repo URL
     REPO_PATH=$(echo "${REPO_URL}" | sed 's|https://github.com/||')
-    echo "Fetching runner registration token for ${REPO_PATH}..."
+    echo "Fetching runner registration token for ${REPO_PATH} via PAT..."
     RUNNER_TOKEN=$(curl -fsSL \
         -X POST \
         -H "Accept: application/vnd.github+json" \
@@ -32,7 +42,7 @@ if [ -z "${RUNNER_TOKEN}" ]; then
         echo "ERROR: Failed to fetch registration token. Check that GITHUB_PAT has the 'repo' scope and REPO_URL is correct."
         exit 1
     fi
-    echo "Registration token obtained successfully."
+    echo "Registration token obtained via PAT."
 fi
 
 # Configure the runner using environment variables
