@@ -10,10 +10,34 @@ if [ -n "${DOCKER_HOST}" ] && [ -n "${DOCKER_CERT_PATH}" ]; then
     echo "DinD TLS certs found."
 fi
 
+# Resolve the registration token.
+# Option 1 (preferred): supply GITHUB_PAT — a token is fetched automatically from the API.
+# Option 2 (legacy):    supply RUNNER_TOKEN directly (must be regenerated every ~1 hour).
+if [ -z "${RUNNER_TOKEN}" ]; then
+    if [ -z "${GITHUB_PAT}" ]; then
+        echo "ERROR: Either GITHUB_PAT or RUNNER_TOKEN must be set."
+        exit 1
+    fi
+    # Extract "<owner>/<repo>" from the repo URL
+    REPO_PATH=$(echo "${REPO_URL}" | sed 's|https://github.com/||')
+    echo "Fetching runner registration token for ${REPO_PATH}..."
+    RUNNER_TOKEN=$(curl -fsSL \
+        -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${GITHUB_PAT}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "https://api.github.com/repos/${REPO_PATH}/actions/runners/registration-token" \
+        | jq -r .token)
+    if [ -z "${RUNNER_TOKEN}" ] || [ "${RUNNER_TOKEN}" = "null" ]; then
+        echo "ERROR: Failed to fetch registration token. Check that GITHUB_PAT has the 'repo' scope and REPO_URL is correct."
+        exit 1
+    fi
+    echo "Registration token obtained successfully."
+fi
+
 # Configure the runner using environment variables
 if ! ./config.sh --url "${REPO_URL}" --token "${RUNNER_TOKEN}" --name "${RUNNER_NAME}" --labels "${LABELS}" --unattended --replace; then
-    echo "ERROR: Runner configuration failed. The RUNNER_TOKEN may be expired (tokens are valid for 1 hour)."
-    echo "Generate a new token at: ${REPO_URL}/settings/actions/runners/new"
+    echo "ERROR: Runner configuration failed."
     exit 1
 fi
 
