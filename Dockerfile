@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     git \
     jq \
     ca-certificates \
+    libicu74 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a non-root user for security
@@ -20,10 +21,20 @@ USER runner
 WORKDIR /home/runner
 
 # Download the official GitHub Actions runner package dynamically
+# and install all runner dependencies (including .NET runtime deps)
+# Architecture is detected at build time so this image works on x64 and arm64
 RUN RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name | sed 's/^v//') \
-    && curl -o actions-runner-linux-x64.tar.gz -L https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz \
-    && tar xzf ./actions-runner-linux-x64.tar.gz \
-    && rm actions-runner-linux-x64.tar.gz
+    && ARCH=$(dpkg --print-architecture) \
+    && case "${ARCH}" in \
+         amd64) RUNNER_ARCH="x64" ;; \
+         arm64) RUNNER_ARCH="arm64" ;; \
+         arm*)  RUNNER_ARCH="arm" ;; \
+         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+       esac \
+    && curl -o actions-runner.tar.gz -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz" \
+    && tar xzf ./actions-runner.tar.gz \
+    && rm actions-runner.tar.gz \
+    && sudo ./bin/installdependencies.sh
 
 # Configure the startup entrypoint script
 COPY --chown=runner:runner entrypoint.sh ./entrypoint.sh
