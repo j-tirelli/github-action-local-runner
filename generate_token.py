@@ -42,6 +42,52 @@ def api_post(url: str, auth_token: str) -> dict:
         sys.exit(1)
 
 
+def build_app_jwt(app_id: str, private_key: str, now: int = None) -> str:
+    """Sign and return a GitHub App JWT. now is injectable for testing."""
+    if now is None:
+        now = int(time.time())
+    return jwt.encode(
+        {"iat": now - 60, "exp": now + 600, "iss": app_id},
+        private_key,
+        algorithm="RS256",
+    )
+
+
+def load_private_key() -> str:
+    """Load the private key from GITHUB_APP_PRIVATE_KEY_PATH or GITHUB_APP_PRIVATE_KEY."""
+    key_path = os.environ.get("GITHUB_APP_PRIVATE_KEY_PATH")
+    if key_path:
+        try:
+            with open(key_path, "r") as f:
+                return f.read()
+        except OSError as exc:
+            print(f"ERROR: Could not read private key file '{key_path}': {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    private_key = os.environ.get("GITHUB_APP_PRIVATE_KEY")
+    if not private_key:
+        print("ERROR: Either GITHUB_APP_PRIVATE_KEY_PATH or GITHUB_APP_PRIVATE_KEY must be set.", file=sys.stderr)
+        sys.exit(1)
+    return private_key
+
+
+def get_registration_token(app_id: str, installation_id: str, repo_path: str, private_key: str) -> str:
+    """Full exchange: private key → App JWT → installation token → registration token."""
+    app_jwt = build_app_jwt(app_id, private_key)
+
+    installation_token = api_post(
+        f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+        app_jwt,
+    )["token"]
+
+    registration_token = api_post(
+        f"https://api.github.com/repos/{repo_path}/actions/runners/registration-token",
+        installation_token,
+    )["token"]
+
+    return registration_token
+
+
 def main() -> None:
     app_id = os.environ.get("GITHUB_APP_ID")
     installation_id = os.environ.get("GITHUB_APP_INSTALLATION_ID")
@@ -51,33 +97,14 @@ def main() -> None:
         print("ERROR: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and REPO_PATH must all be set.", file=sys.stderr)
         sys.exit(1)
 
-    key_path = os.environ.get("GITHUB_APP_PRIVATE_KEY_PATH")
-    if key_path:
-        try:
-            with open(key_path, "r") as f:
-                private_key = f.read()
-        except OSError as exc:
-            print(f"ERROR: Could not read private key file '{key_path}': {exc}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        private_key = os.environ.get("GITHUB_APP_PRIVATE_KEY")
-        if not private_key:
-            print("ERROR: Either GITHUB_APP_PRIVATE_KEY_PATH or GITHUB_APP_PRIVATE_KEY must be set.", file=sys.stderr)
-            sys.exit(1)
+    private_key = load_private_key()
+    token = get_registration_token(app_id, installation_id, repo_path, private_key)
+    print(token, end="")
 
-    # Build and sign the App JWT (valid for 10 minutes)
-    now = int(time.time())
-    app_jwt = jwt.encode(
-        {"iat": now - 60, "exp": now + 600, "iss": app_id},
-        private_key,
-        algorithm="RS256",
-    )
 
-    # Exchange App JWT for a short-lived installation access token
-    installation_token = api_post(
-        f"https://api.github.com/app/installations/{installation_id}/access_tokens",
-        app_jwt,
-    )["token"]
+if __name__ == "__main__":
+    main()
+
 
     # Exchange installation token for a runner registration token
     registration_token = api_post(
