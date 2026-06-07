@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-jwt \
     python3-cryptography \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a non-root user for security
