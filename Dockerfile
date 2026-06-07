@@ -19,7 +19,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a non-root user for security
-RUN useradd -m runner && usermod -aG sudo runner && echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN useradd -m runner && usermod -aG sudo,docker runner && echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Create the externals directory where the runner downloads Node.js
+RUN mkdir -p /__e && chown runner:runner /__e
 
 USER runner
 WORKDIR /home/runner
