@@ -28,7 +28,7 @@ WORKDIR /home/runner
 # Architecture is detected at build time so this image works on x64 and arm64
 # CACHE_BUST ensures this layer is never served from cache, so the latest runner is always fetched
 ARG CACHE_BUST
-RUN RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name | sed 's/^v//') \
+RUN echo "Cache bust: ${CACHE_BUST}" && RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name | sed 's/^v//') \
     && ARCH=$(dpkg --print-architecture) \
     && case "${ARCH}" in \
          amd64) RUNNER_ARCH="x64" ;; \
