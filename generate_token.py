@@ -106,14 +106,5 @@ if __name__ == "__main__":
     main()
 
 
-    # Exchange installation token for a runner registration token
-    registration_token = api_post(
-        f"https://api.github.com/repos/{repo_path}/actions/runners/registration-token",
-        installation_token,
-    )["token"]
-
-    print(registration_token, end="")
-
-
 if __name__ == "__main__":
     main()
