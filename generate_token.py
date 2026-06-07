@@ -68,7 +68,9 @@ def load_private_key() -> str:
     if not private_key:
         print("ERROR: Either GITHUB_APP_PRIVATE_KEY_PATH or GITHUB_APP_PRIVATE_KEY must be set.", file=sys.stderr)
         sys.exit(1)
-    return private_key
+    # Some UIs (e.g. Cosmos Cloud) strip real newlines from env var values.
+    # Support both literal \n sequences and actual newlines.
+    return private_key.replace("\\n", "\n")
 
 
 def get_registration_token(app_id: str, installation_id: str, repo_path: str, private_key: str) -> str:
